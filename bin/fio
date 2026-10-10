@@ -1,0 +1,6 @@
+#!/bin/sh
+# Atalho para rodar comandos dentro do container de workspace.
+# Uso: bin/fio pnpm turbo test --filter=@fio/api
+set -e
+
+docker compose exec workspace "$@"

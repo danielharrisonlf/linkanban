@@ -1,0 +1,13 @@
+# General-purpose Node image with pnpm/turbo available.
+# Used by the `setup` and `workspace` compose services; the repo is bind-mounted
+# at /fio by docker-compose, so no source is copied into this image.
+
+FROM oven/bun:1.4.2-alpine AS bun-runtime
+FROM node:24-alpine
+COPY --from=bun-runtime /usr/local/bin/bun /usr/local/bin/bun
+
+RUN apk add --no-cache git curl bash
+
+RUN corepack enable pnpm && corepack install -g pnpm@10.11.1
+
+WORKDIR /fio

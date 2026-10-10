@@ -1,0 +1,118 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: fio-postgres
+    environment:
+      POSTGRES_USER: linkanban
+      POSTGRES_PASSWORD: linkanban
+      POSTGRES_DB: linkanban
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U linkanban -d linkanban"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  setup:
+    container_name: fio-setup
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cli
+    volumes:
+      - .:/fio
+    command: sh -lc "pnpm install --frozen-lockfile"
+    restart: "no"
+
+  workspace:
+    container_name: fio-workspace
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cli
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    volumes:
+      - .:/fio
+    command: sh -c "tail -f /dev/null"
+    restart: "no"
+
+  # Executa migrations explícitas no PostgreSQL usando o catálogo do .NET
+  api-migrate:
+    container_name: fio-api-migrate
+    build:
+      context: .
+      dockerfile: apps/api-dotnet/Dockerfile
+      target: production
+    working_dir: /app
+    environment:
+      ConnectionStrings__Fio: Host=postgres;Port=5432;Database=linkanban;Username=linkanban;Password=linkanban
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["--migrate"]
+    restart: "no"
+
+  # Backend em ASP.NET Core 10
+  api:
+    container_name: fio-api
+    build:
+      context: .
+      dockerfile: apps/api-dotnet/Dockerfile
+      target: development
+    working_dir: /workspace/apps/api-dotnet
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:3333
+      ConnectionStrings__Fio: Host=postgres;Port=5432;Database=linkanban;Username=linkanban;Password=linkanban
+      AUTH_DISABLED: "true"
+      LINKANBAN_BOOTSTRAP_TOKEN: local-development-token
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api-migrate:
+        condition: service_completed_successfully
+    volumes:
+      - .:/workspace
+    ports:
+      - "3333:3333"
+
+  # Frontend SPA em Vite + React 19
+  web:
+    container_name: fio-web
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: dev
+    env_file:
+      - ./apps/web/.env
+    environment:
+      VITE_API_URL: http://localhost:3333/v1
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+      api:
+        condition: service_started
+    volumes:
+      - .:/fio
+    ports:
+      - "5173:5173"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5173/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+networks:
+  default:
+    name: fio
+    driver: bridge
+
+volumes:
+  postgres-data:
