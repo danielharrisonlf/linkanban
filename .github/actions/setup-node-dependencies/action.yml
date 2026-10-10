@@ -1,0 +1,22 @@
+name: Setup Node dependencies
+description: Instala pnpm, configura o Node.js e instala as dependências do monorepo
+runs:
+  using: "composite"
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version-file: 'package.json'
+        cache: 'pnpm'
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Setup Bun (API and CLI runtime)
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: '1.4.2'

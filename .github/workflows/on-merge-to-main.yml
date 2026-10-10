@@ -1,0 +1,99 @@
+name: On Merge to Main
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and Test Merge Result
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: linkanban
+          POSTGRES_PASSWORD: linkanban
+          POSTGRES_DB: linkanban_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U linkanban -d linkanban_test" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://linkanban:linkanban@localhost:5432/linkanban_test
+      LINKANBAN_TEST_DATABASE_URL: postgresql://linkanban:linkanban@localhost:5432/linkanban_test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node dependencies
+        uses: ./.github/actions/setup-node-dependencies
+
+      - name: Build all projects
+        run: pnpm turbo build
+
+      - name: Run all tests
+        run: pnpm turbo test
+
+  dotnet-unit:
+    name: .NET API unit tests
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('apps/api-dotnet/Fio.slnx') != '' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore .NET API
+        run: dotnet restore apps/api-dotnet/Fio.slnx
+
+      - name: Build .NET API
+        run: dotnet build apps/api-dotnet/Fio.slnx --no-restore
+
+      - name: Run .NET unit tests (no PostgreSQL service)
+        run: dotnet test apps/api-dotnet/Fio.slnx --no-build
+
+  dotnet-integration:
+    name: .NET API integration tests
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('apps/api-dotnet/Fio.slnx') != '' }}
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: linkanban
+          POSTGRES_PASSWORD: linkanban
+          POSTGRES_DB: linkanban_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U linkanban -d linkanban_test" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://linkanban:linkanban@localhost:5432/linkanban_test
+      LINKANBAN_TEST_DATABASE_URL: postgresql://linkanban:linkanban@localhost:5432/linkanban_test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore .NET API
+        run: dotnet restore apps/api-dotnet/Fio.slnx
+
+      - name: Migrate isolated test database
+        run: dotnet run --project apps/api-dotnet/src/Fio.Api -- --migrate
+        env:
+          ConnectionStrings__Fio: ${{ env.LINKANBAN_TEST_DATABASE_URL }}
+
+      - name: Run .NET integration tests
+        run: dotnet test apps/api-dotnet/Fio.slnx --no-restore

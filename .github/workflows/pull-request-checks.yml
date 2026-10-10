@@ -1,0 +1,235 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+env:
+  TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+
+jobs:
+  lint-format:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node dependencies
+        uses: ./.github/actions/setup-node-dependencies
+
+      - name: Run linting
+        run: pnpm turbo lint --affected
+
+      - name: Run format check
+        run: pnpm turbo format --affected
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: linkanban
+          POSTGRES_PASSWORD: linkanban
+          POSTGRES_DB: linkanban_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U linkanban -d linkanban_test" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://linkanban:linkanban@localhost:5432/linkanban_test
+      LINKANBAN_TEST_DATABASE_URL: postgresql://linkanban:linkanban@localhost:5432/linkanban_test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node dependencies
+        uses: ./.github/actions/setup-node-dependencies
+
+      - name: Run tests
+        run: pnpm turbo test --affected
+
+  build:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node dependencies
+        uses: ./.github/actions/setup-node-dependencies
+
+      - name: Build projects
+        run: pnpm turbo build --affected
+
+  dotnet-unit:
+    name: .NET API unit tests
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('apps/api-dotnet/Fio.slnx') != '' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore .NET API
+        run: dotnet restore apps/api-dotnet/Fio.slnx
+
+      - name: Build .NET API
+        run: dotnet build apps/api-dotnet/Fio.slnx --no-restore
+
+      - name: Run .NET unit tests (no PostgreSQL service)
+        run: dotnet test apps/api-dotnet/Fio.slnx --no-build
+
+  dotnet-integration:
+    name: .NET API integration tests
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('apps/api-dotnet/Fio.slnx') != '' }}
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: linkanban
+          POSTGRES_PASSWORD: linkanban
+          POSTGRES_DB: linkanban_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U linkanban -d linkanban_test" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://linkanban:linkanban@localhost:5432/linkanban_test
+      LINKANBAN_TEST_DATABASE_URL: postgresql://linkanban:linkanban@localhost:5432/linkanban_test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore .NET API
+        run: dotnet restore apps/api-dotnet/Fio.slnx
+
+      - name: Migrate isolated test database
+        run: dotnet run --project apps/api-dotnet/src/Fio.Api -- --migrate
+        env:
+          ConnectionStrings__Fio: ${{ env.LINKANBAN_TEST_DATABASE_URL }}
+
+      - name: Run .NET integration tests
+        run: dotnet test apps/api-dotnet/Fio.slnx --no-restore
+
+  docker-build:
+    name: Docker Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Setup Node dependencies
+        uses: ./.github/actions/setup-node-dependencies
+
+      - name: Build all Docker images
+        run: pnpm turbo docker:build --affected
+
+  cli-portability:
+    name: CLI Go (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: packages/cli/go.mod
+          cache-dependency-path: packages/cli/go.sum
+      - name: Test, vet and build CLI
+        shell: pwsh
+        run: |
+          go -C packages/cli test ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go -C packages/cli vet ./...
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force -Path packages/cli/build | Out-Null
+          $cliArtifact = if ($IsWindows) { './packages/cli/build/linkanban.exe' } else { './packages/cli/build/linkanban' }
+          $buildTarget = if ($IsWindows) { './build/linkanban.exe' } else { './build/linkanban' }
+          go -C packages/cli build -o $buildTarget ./cmd/linkanban
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $cliArtifact --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $cliArtifact --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  conventional-commits:
+    name: Validate Conventional Commits
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate all commits follow conventional commits
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          failOnWarnings: true
+          configFile: .commitlintrc.json
+          helpURL: https://www.conventionalcommits.org
+
+  e2e:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node dependencies
+        uses: ./.github/actions/setup-node-dependencies
+
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: pnpm test:e2e:chromium
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+  all-checks-pass:
+    name: All Checks Pass
+    runs-on: ubuntu-latest
+    needs: [lint-format, test, build, dotnet-unit, dotnet-integration, docker-build, cli-portability, conventional-commits, e2e]
+    if: always()
+
+    steps:
+      - name: Verify all checks passed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "One or more checks failed or were cancelled"
+          exit 1
+
+      - name: All checks passed
+        run: echo "All PR checks passed successfully!"
