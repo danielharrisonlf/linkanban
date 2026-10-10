@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#090d12" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      name="description"
+      content="Fio — registre cada candidatura, acompanhe as etapas e não deixe nenhum processo morrer no silêncio."
+    />
+    <title>Fio</title>
+    <script>
+      (() => {
+        try {
+          if (localStorage.getItem("fio-theme") === "light") {
+            document.documentElement.dataset.theme = "light";
+          }
+        } catch {
+          // O modo escuro é a base quando o navegador bloqueia armazenamento.
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
