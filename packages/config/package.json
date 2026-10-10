@@ -1,0 +1,17 @@
+{
+  "name": "@fio/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Configuração compartilhada do monorepo Fio",
+  "license": "MIT",
+  "keywords": [
+    "fio",
+    "config",
+    "typescript",
+    "biome"
+  ],
+  "exports": {
+    "./biome": "./base/biome.json",
+    "./typescript": "./base/tsconfig.json"
+  }
+}
