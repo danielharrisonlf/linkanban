@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Fio.Api/Fio.Api.csproj" />
+    <Project Path="src/Fio.Application/Fio.Application.csproj" />
+    <Project Path="src/Fio.Infrastructure/Fio.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Fio.Api.Tests/Fio.Api.Tests.csproj" />
+  </Folder>
+</Solution>
