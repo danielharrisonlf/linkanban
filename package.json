@@ -1,0 +1,48 @@
+{
+	"name": "fio",
+	"version": "0.0.1",
+	"private": true,
+	"description": "Kanban de candidaturas: acompanhe empresas, vagas e follow-ups em um pipeline visual",
+	"keywords": [
+		"kanban",
+		"jobs",
+		"candidaturas",
+		"monorepo"
+	],
+	"license": "MIT",
+	"packageManager": "pnpm@10.11.1",
+	"engines": {
+		"node": "24.x"
+	},
+	"scripts": {
+		"build": "turbo build",
+		"start:dev": "turbo start:dev",
+		"dev": "turbo start:dev",
+		"lint": "turbo lint",
+		"lint:fix": "turbo lint:fix",
+		"format": "turbo format",
+		"format:fix": "turbo format:fix",
+		"check": "turbo check",
+		"check:fix": "turbo check:fix",
+		"test": "turbo test",
+		"test:watch": "turbo test:watch",
+		"test:cov": "turbo test:cov",
+		"db:migrate": "dotnet run --project apps/api-dotnet/src/Fio.Api -- --migrate",
+		"test:e2e": "playwright test",
+		"test:e2e:ui": "playwright test --ui",
+		"test:e2e:headed": "playwright test --headed",
+		"test:e2e:debug": "playwright test --debug",
+		"test:e2e:report": "playwright show-report",
+		"test:e2e:smoke": "playwright test --grep @smoke",
+		"test:e2e:chromium": "playwright test --project=chromium",
+		"test:e2e:watch": "playwright test --project=chromium --headed --workers=1",
+		"setup:env": "node scripts/setup-env.mjs"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "catalog:",
+		"@playwright/test": "^1.63.0",
+		"playwright-core": "^1.63.0",
+		"turbo": "2.5.8",
+		"typescript": "catalog:"
+	}
+}

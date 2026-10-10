@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# Test outputs
+coverage/
+test-results/
+playwright-report/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# .NET
+apps/api-dotnet/**/bin/
+apps/api-dotnet/**/obj/
+.vs/
+TestResults/
+
+# Local agent artifacts
+.agent/
+.agents/
+.impeccable/
+skills/
+output/
+

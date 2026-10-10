@@ -1,0 +1,17 @@
+packages:
+  - apps/*
+  - packages/*
+
+catalog:
+  '@biomejs/biome': 2.2.4
+  '@types/node': 24.5.0
+  typescript: 5.9.2
+  vitest: 4.0.18
+
+injectWorkspacePackages: true
+
+
+onlyBuiltDependencies:
+  - '@biomejs/biome'
+  - '@tailwindcss/oxide'
+  - esbuild
